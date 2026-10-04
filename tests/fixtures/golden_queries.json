@@ -1,0 +1,240 @@
+[
+  {
+    "id": "doc_01",
+    "question": "What are the member program policies?",
+    "expected_category": "program_policies",
+    "expected_documents": [
+      "01_program_policies.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_02",
+    "question": "What rooftop rebate programs are available?",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "02_incentive_rebate_programs.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_03",
+    "question": "When are monthly bills due?",
+    "expected_category": "billing_account",
+    "expected_documents": [
+      "03_billing_faqs.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_04",
+    "question": "What technical installation guidance should I follow?",
+    "expected_category": "technical_installation",
+    "expected_documents": [
+      "04_technical_installation_guidance.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_05",
+    "question": "What are the latest company updates?",
+    "expected_category": "company_updates",
+    "expected_documents": [
+      "05_company_updates.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_06_rebate",
+    "question": "How is a reversed rebate credited?",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "06_ambiguous_rebate_billing_adjustments.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_06_billing",
+    "question": "How will a rebate reversal affect my bill?",
+    "expected_category": "billing_account",
+    "expected_documents": [
+      "06_ambiguous_rebate_billing_adjustments.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_07",
+    "question": "How do installers renew their SunGrid certification?",
+    "expected_category": "technical_installation",
+    "expected_documents": [
+      "07_installer_certification.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_08",
+    "question": "How do members vote in cooperative elections?",
+    "expected_category": "program_policies",
+    "expected_documents": [
+      "08_governance_voting.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_09",
+    "question": "Can I add the battery storage incentive to my rooftop rebate?",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "09_battery_storage_incentive.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_10",
+    "question": "Who can receive the low-income bill credit?",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "10_low_income_bill_credit.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_11",
+    "question": "How is my net-metering true-up calculated?",
+    "expected_category": "billing_account",
+    "expected_documents": [
+      "11_net_metering_trueup.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_12",
+    "question": "What happens after an autopay payment fails?",
+    "expected_category": "billing_account",
+    "expected_documents": [
+      "12_autopay_failure_policy.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_13",
+    "question": "What are the battery installation requirements?",
+    "expected_category": "technical_installation",
+    "expected_documents": [
+      "13_battery_storage_installation.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "doc_14",
+    "question": "What did SunGrid report in its annual impact report?",
+    "expected_category": "company_updates",
+    "expected_documents": [
+      "14_annual_impact_report.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "cross_battery",
+    "question": "Can I get the battery add-on if my installer is not certified?",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "09_battery_storage_incentive.md",
+      "07_installer_certification.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "cross_trueup",
+    "question": "How does net-metering credit affect the monthly bill true-up?",
+    "expected_category": "billing_account",
+    "expected_documents": [
+      "03_billing_faqs.md",
+      "11_net_metering_trueup.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "eligibility_pass",
+    "question": "Check eligibility: ZIP 94101, annual income $80,000, system size 5 kW, installer approved",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "02_incentive_rebate_programs.md"
+    ],
+    "expected_outcome": "eligible"
+  },
+  {
+    "id": "eligibility_installer_failure",
+    "question": "Check eligibility: ZIP 94101, income $80,000, system size 5 kW, installer not approved",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "02_incentive_rebate_programs.md"
+    ],
+    "expected_outcome": "ineligible"
+  },
+  {
+    "id": "eligibility_zip_failure",
+    "question": "Check eligibility: ZIP 10001, income $80,000, system size 5 kW, installer approved",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "02_incentive_rebate_programs.md"
+    ],
+    "expected_outcome": "ineligible"
+  },
+  {
+    "id": "eligibility_income_failure",
+    "question": "Check eligibility: ZIP 94101, annual income $140,000, system size 5 kW, installer approved",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "02_incentive_rebate_programs.md"
+    ],
+    "expected_outcome": "ineligible"
+  },
+  {
+    "id": "eligibility_size_failure",
+    "question": "Check eligibility: ZIP 94101, income $80,000, system size 12 kW, installer approved",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [
+      "02_incentive_rebate_programs.md"
+    ],
+    "expected_outcome": "ineligible"
+  },
+  {
+    "id": "eligibility_missing",
+    "question": "Am I eligible for the rooftop rebate?",
+    "expected_category": "incentive_rebate",
+    "expected_documents": [],
+    "expected_outcome": "needs_more_input"
+  },
+  {
+    "id": "unsupported_sungrid",
+    "question": "Does SunGrid offer pet insurance?",
+    "expected_category": "non_relevant",
+    "expected_documents": [],
+    "expected_outcome": "unsupported"
+  },
+  {
+    "id": "off_topic",
+    "question": "What is the capital of France?",
+    "expected_category": "non_relevant",
+    "expected_documents": [],
+    "expected_outcome": "unsupported"
+  },
+  {
+    "id": "multi_category",
+    "question": "How do bill credits and rebates interact?",
+    "expected_category": "billing_account",
+    "expected_documents": [
+      "03_billing_faqs.md",
+      "02_incentive_rebate_programs.md"
+    ],
+    "expected_outcome": "answered"
+  },
+  {
+    "id": "low_confidence",
+    "question": "Can you help me with this?",
+    "expected_category": "billing_account",
+    "expected_documents": [],
+    "expected_outcome": "clarification"
+  }
+]

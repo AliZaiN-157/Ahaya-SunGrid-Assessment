@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.9.3
+    container_name: sungrid-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"        # REST API
+      - "6334:6334"        # gRPC (optional)
+    environment:
+      - QDRANT_DATA_PATH=/qdrant/storage
+      - QDRANT__SERVICE__API_KEYS=welcome-key
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - sungrid
+
+networks:
+  sungrid:
+    driver: bridge
+
+volumes:
+  qdrant_storage:

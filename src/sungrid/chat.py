@@ -1,0 +1,283 @@
+import json
+import logging
+import os
+import time
+from contextvars import ContextVar
+from uuid import uuid4
+from collections.abc import Callable
+from dataclasses import dataclass
+
+from pydantic import BaseModel, Field
+
+from sungrid.eligibility import EligibilityFacts, EligibilityResult, collect_facts
+from sungrid.taxonomy import Classification
+
+
+MIN_CONFIDENCE = 0.60
+MIN_RELEVANCE = 0.35
+UNSUPPORTED = "I couldn't find information about that in the SunGrid documents."
+MAX_QUESTION_LENGTH = 2000
+logger = logging.getLogger("sungrid.requests")
+request_started = ContextVar("request_started", default=0.0)
+
+
+class RetrievedChunk(BaseModel):
+    chunk_id: str | None = None
+    document_title: str
+    section_heading: str
+    body: str
+    score: float
+
+
+class Source(BaseModel):
+    document_title: str
+    section_heading: str
+
+
+class ChatReply(BaseModel):
+    answer: str
+    sources: list[Source]
+    outcome: str = "answered"
+
+
+class ChatState(BaseModel):
+    eligibility_pending: bool = False
+    eligibility_facts: EligibilityFacts = Field(default_factory=EligibilityFacts)
+
+
+@dataclass
+class ChatServices:
+    classify: Callable[[str], Classification]
+    search: Callable[[str, str | None], list[RetrievedChunk]]
+    answer: Callable[[str, list[RetrievedChunk]], str]
+    check_eligibility: Callable[[EligibilityFacts], EligibilityResult]
+
+
+def handle_chat_message(
+    question: str, services: ChatServices, state: ChatState | None = None
+) -> ChatReply:
+    state = state if state is not None else ChatState()
+    request_id = str(uuid4())
+    request_started.set(time.perf_counter())
+    if not question.strip():
+        return _finish(
+            request_id,
+            ChatReply(
+                answer="Please enter a question.", sources=[], outcome="rejected"
+            ),
+        )
+    if len(question) > MAX_QUESTION_LENGTH:
+        return _finish(
+            request_id,
+            ChatReply(
+                answer="Please keep your question under 2,000 characters.",
+                sources=[],
+                outcome="rejected",
+            ),
+        )
+
+    if state.eligibility_pending:
+        return _handle_eligibility(question, services, state, request_id)
+
+    try:
+        classification = services.classify(question)
+    except Exception as exc:
+        return _finish(
+            request_id,
+            ChatReply(
+                answer="I couldn't process that question right now. Please try again.",
+                sources=[],
+                outcome="error",
+            ),
+            error_type=type(exc).__name__,
+        )
+    if classification.primary_category == "non_relevant":
+        return _finish(
+            request_id,
+            ChatReply(answer=UNSUPPORTED, sources=[], outcome="unsupported"),
+            category="non_relevant",
+            confidence=classification.confidence,
+        )
+    if classification.confidence < MIN_CONFIDENCE:
+        return _finish(
+            request_id,
+            ChatReply(
+                answer="I'm not sure which SunGrid topic you mean. Could you clarify what you're asking about?",
+                sources=[],
+                outcome="clarification",
+            ),
+            category=classification.primary_category,
+            confidence=classification.confidence,
+        )
+
+    if classification.eligibility_intent:
+        state.eligibility_pending = True
+        state.eligibility_facts = collect_facts(state.eligibility_facts, question)
+        return _eligibility_or_request_more(services, state, request_id, classification)
+
+    try:
+        chunks = services.search(question, classification.primary_category)
+    except Exception as exc:
+        return _finish(
+            request_id,
+            ChatReply(
+                answer="I couldn't search the SunGrid documents right now. Please try again.",
+                sources=[],
+                outcome="error",
+            ),
+            category=classification.primary_category,
+            error_type=type(exc).__name__,
+        )
+    widened = not chunks or chunks[0].score < MIN_RELEVANCE
+    if widened:
+        try:
+            chunks = services.search(question, None)
+        except Exception as exc:
+            return _finish(
+                request_id,
+                ChatReply(
+                    answer="I couldn't search the SunGrid documents right now. Please try again.",
+                    sources=[],
+                    outcome="error",
+                ),
+                category=classification.primary_category,
+                widened=True,
+                error_type=type(exc).__name__,
+            )
+    if not chunks or chunks[0].score < MIN_RELEVANCE:
+        return _finish(
+            request_id,
+            ChatReply(answer=UNSUPPORTED, sources=[], outcome="unsupported"),
+            category=classification.primary_category,
+            widened=widened,
+        )
+
+    try:
+        answer = services.answer(question, chunks)
+    except Exception as exc:
+        return _finish(
+            request_id,
+            ChatReply(
+                answer="I couldn't prepare an answer right now. Please try again.",
+                sources=[],
+                outcome="error",
+            ),
+            category=classification.primary_category,
+            widened=widened,
+            error_type=type(exc).__name__,
+        )
+    if widened:
+        answer = (
+            "I broadened the search because the category search found no sufficiently relevant result.\n\n"
+            + answer
+        )
+    sources = []
+    seen_sources = set()
+    for chunk in chunks:
+        source_key = (chunk.document_title, chunk.section_heading)
+        if source_key not in seen_sources:
+            seen_sources.add(source_key)
+            sources.append(
+                Source(document_title=source_key[0], section_heading=source_key[1])
+            )
+    return _finish(
+        request_id,
+        ChatReply(answer=answer, sources=sources),
+        category=classification.primary_category,
+        confidence=classification.confidence,
+        widened=widened,
+        path="knowledge",
+        chunk_ids=[chunk.chunk_id for chunk in chunks],
+        chunk_scores=[chunk.score for chunk in chunks],
+    )
+
+
+def _handle_eligibility(
+    question: str, services: ChatServices, state: ChatState, request_id: str
+) -> ChatReply:
+    state.eligibility_facts = collect_facts(state.eligibility_facts, question)
+    return _eligibility_or_request_more(services, state, request_id, None)
+
+
+def _eligibility_or_request_more(
+    services: ChatServices,
+    state: ChatState,
+    request_id: str,
+    classification: Classification | None,
+) -> ChatReply:
+    missing = state.eligibility_facts.missing_labels()
+    category = classification.primary_category if classification else "incentive_rebate"
+    confidence = classification.confidence if classification else None
+    if missing:
+        answer = (
+            "To check rebate eligibility, please provide: " + ", ".join(missing) + "."
+        )
+        return _finish(
+            request_id,
+            ChatReply(answer=answer, sources=[], outcome="needs_more_input"),
+            category=category,
+            confidence=confidence,
+            path="eligibility",
+        )
+
+    try:
+        result = EligibilityResult.model_validate(
+            services.check_eligibility(state.eligibility_facts)
+        )
+    except Exception as exc:
+        state.eligibility_pending = False
+        state.eligibility_facts = EligibilityFacts()
+        return _finish(
+            request_id,
+            ChatReply(
+                answer="I couldn't complete the eligibility check. Please try again later.",
+                sources=[],
+                outcome="error",
+            ),
+            category=category,
+            confidence=confidence,
+            path="eligibility",
+            error_type=type(exc).__name__,
+        )
+
+    state.eligibility_pending = False
+    state.eligibility_facts = EligibilityFacts()
+    source = Source(
+        document_title="SunGrid Cooperative - Incentive & Rebate Programs",
+        section_heading="Rooftop Rebate Program",
+    )
+    if result.eligible:
+        answer = f"The eligibility checks passed. Your estimated rebate is ${result.estimated_rebate_usd:,.2f}. This is an estimate, not a final award."
+        return _finish(
+            request_id,
+            ChatReply(answer=answer, sources=[source], outcome="eligible"),
+            category=category,
+            confidence=confidence,
+            path="eligibility",
+        )
+    answer = f"The household is not eligible: {result.reason} The rebate is $0. You may appeal within 30 days of the determination."
+    return _finish(
+        request_id,
+        ChatReply(answer=answer, sources=[source], outcome="ineligible"),
+        category=category,
+        confidence=confidence,
+        path="eligibility",
+    )
+
+
+def _finish(request_id: str, reply: ChatReply, **details) -> ChatReply:
+    details.setdefault("path", "knowledge")
+    event = {
+        "request_id": request_id,
+        "outcome": reply.outcome,
+        "total_latency_ms": round((time.perf_counter() - request_started.get()) * 1000),
+        "classifier_model": os.getenv("CLASSIFIER_MODEL_ID"),
+        "answer_model": os.getenv("ANSWER_MODEL_ID"),
+        **details,
+    }
+    if "category" in details:
+        event["applied_filter"] = (
+            None if details.get("widened") else details["category"]
+        )
+    logger.info(json.dumps(event, sort_keys=True))
+    return reply

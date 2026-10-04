@@ -1,0 +1,59 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+env/
+\*.egg
+
+# Byte-compiled / optimized
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+sdist/
+wheelhouse/
+
+# Virtual environments
+.env
+.venv/
+venv/
+ENV/
+
+# Environment / secrets
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Qdrant runtime (Docker volume - local database directory)
+qdrant_storage/
+
+# Logs
+logs/
+*.log
+*.log*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Test artifacts
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
