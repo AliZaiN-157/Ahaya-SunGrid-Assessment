@@ -2,16 +2,19 @@ import json
 
 import httpx
 import pytest
+from pydantic_ai import Agent, ModelRetry, UnexpectedModelBehavior
 from pydantic_ai.models.test import TestModel
 
 from sungrid import model
-from sungrid.chat import ChatServices, RetrievedChunk, handle_chat_message
+from sungrid.chat import ChatServices, RetrievedChunk, handle_chat_message, request_metrics
 from sungrid.eligibility import EligibilityResult
+from sungrid.taxonomy import Classification
 from sungrid.model import (
     agent_usage_limits,
     count_model_retries,
     create_classifier,
     retry_model_call,
+    run_agent,
 )
 
 
@@ -67,6 +70,36 @@ def test_model_output_retry_is_counted():
             return [ModelRequest(parts=[RetryPromptPart(content="invalid output")])]
 
     assert count_model_retries(Result()) == 1
+
+
+def test_exhausted_model_output_retries_are_counted():
+    agent = Agent(
+        TestModel(
+            custom_output_args={
+                "primary_category": "billing_account",
+                "confidence": 0.9,
+                "eligibility_intent": False,
+            }
+        ),
+        output_type=Classification,
+        retries=2,
+    )
+
+    @agent.output_validator
+    async def always_retry(ctx, output):
+        raise ModelRetry("retry output")
+
+    metrics = {"retry_count": 0}
+    token = request_metrics.set(metrics)
+    try:
+        with pytest.raises(
+            UnexpectedModelBehavior, match="Exceeded maximum output retries"
+        ):
+            run_agent(agent, "question")
+    finally:
+        request_metrics.reset(token)
+
+    assert metrics["retry_count"] == 2
 
 
 def test_agent_step_limit_defaults_to_four_and_can_be_configured(monkeypatch):
