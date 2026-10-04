@@ -7,7 +7,12 @@ from pydantic_ai.models.test import TestModel
 from sungrid import model
 from sungrid.chat import ChatServices, RetrievedChunk, handle_chat_message
 from sungrid.eligibility import EligibilityResult
-from sungrid.model import agent_usage_limits, create_classifier, retry_model_call
+from sungrid.model import (
+    agent_usage_limits,
+    count_model_retries,
+    create_classifier,
+    retry_model_call,
+)
 
 
 def test_missing_api_key_message_points_to_env_and_api(monkeypatch):
@@ -52,6 +57,16 @@ def test_authentication_failure_is_not_retried():
         retry_model_call(call, sleep=delays.append)
     assert len(attempts) == 1
     assert delays == []
+
+
+def test_model_output_retry_is_counted():
+    from pydantic_ai import ModelRequest, RetryPromptPart
+
+    class Result:
+        def all_messages(self):
+            return [ModelRequest(parts=[RetryPromptPart(content="invalid output")])]
+
+    assert count_model_retries(Result()) == 1
 
 
 def test_agent_step_limit_defaults_to_four_and_can_be_configured(monkeypatch):

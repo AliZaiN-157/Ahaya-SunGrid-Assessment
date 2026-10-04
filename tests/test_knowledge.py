@@ -23,11 +23,20 @@ def test_loaded_chunks_include_index_metadata():
         if chunk.document_id == "01_program_policies"
         and chunk.section_heading == "Grievance Procedure"
     )
+    annual_meeting = next(
+        chunk
+        for chunk in chunks
+        if chunk.document_id == "01_program_policies"
+        and chunk.section_heading == "Annual Meeting Attendance"
+    )
 
     assert memberships.chunk_index == 0
     assert memberships.source_path == "01_program_policies.md"
     assert memberships.token_count > 0
     assert grievance.cross_references == ["Incentive & Rebate Programs document"]
+    assert annual_meeting.cross_references == [
+        "Cooperative Governance & Voting Rights document"
+    ]
 
 
 def test_qdrant_chunk_payload_persists_index_metadata():

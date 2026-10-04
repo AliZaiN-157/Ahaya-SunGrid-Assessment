@@ -31,7 +31,12 @@ class IndexManifest(BaseModel):
 
 def load_chunks(documents_dir: Path) -> list[KnowledgeChunk]:
     chunks = []
-    cross_reference_pattern = re.compile(r"\(see\s+([^)]+)\)", re.IGNORECASE)
+    cross_reference_patterns = (
+        re.compile(r"\(see\s+([^)]+)\)", re.IGNORECASE),
+        re.compile(
+            r"\b([A-Z][A-Za-z0-9'’.-]*(?:\s+(?:[A-Z][A-Za-z0-9'’.-]*|&))*\s+(?:document|materials))\b"
+        ),
+    )
     token_pattern = re.compile(r"\w+|[^\w\s]")
     for path in sorted(documents_dir.glob("*.md")):
         text = path.read_text(encoding="utf-8")
@@ -57,6 +62,21 @@ def load_chunks(documents_dir: Path) -> list[KnowledgeChunk]:
                 )
             chunk_key = f"{path.name}:{heading}:{body}"
             embedding_text = f"{title}\n{heading}\n{body}"
+            cross_reference_matches = sorted(
+                (
+                    match.start(),
+                    match.end(),
+                    match.group(1).strip().rstrip(".,;"),
+                )
+                for pattern in cross_reference_patterns
+                for match in pattern.finditer(body)
+            )
+            cross_references = []
+            covered_until = -1
+            for start, end, reference in cross_reference_matches:
+                if start >= covered_until and reference not in cross_references:
+                    cross_references.append(reference)
+                    covered_until = end
             chunks.append(
                 KnowledgeChunk(
                     point_id=str(uuid5(NAMESPACE_URL, chunk_key)),
@@ -69,10 +89,7 @@ def load_chunks(documents_dir: Path) -> list[KnowledgeChunk]:
                     score=0.0,
                     primary_category=categories[0],
                     categories=list(categories),
-                    cross_references=[
-                        reference.strip().rstrip(".,")
-                        for reference in cross_reference_pattern.findall(body)
-                    ],
+                    cross_references=cross_references,
                     chunk_index=chunk_index,
                     token_count=len(token_pattern.findall(embedding_text)),
                     source_path=path.relative_to(documents_dir).as_posix(),

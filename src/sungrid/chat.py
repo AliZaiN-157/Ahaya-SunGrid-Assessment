@@ -30,12 +30,13 @@ def record_model_retry() -> None:
         metrics["retry_count"] += 1
 
 
-def record_model_usage(usage) -> None:
+def record_model_usage(usage, retries: int = 0) -> None:
     metrics = request_metrics.get()
     if metrics is None:
         return
     requests = int(getattr(usage, "requests", 0) or 0)
     metrics["model_requests"] += requests
+    metrics["retry_count"] += retries
     for name in ("input_tokens", "output_tokens", "total_tokens"):
         metrics[name] += int(getattr(usage, name, 0) or 0)
     cost = getattr(usage, "cost", None)
