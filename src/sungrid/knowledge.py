@@ -16,6 +16,10 @@ class KnowledgeChunk(RetrievedChunk):
     embedding_text: str
     primary_category: str
     categories: list[str]
+    cross_references: list[str]
+    chunk_index: int
+    token_count: int
+    source_path: str
 
 
 class IndexManifest(BaseModel):
@@ -27,6 +31,8 @@ class IndexManifest(BaseModel):
 
 def load_chunks(documents_dir: Path) -> list[KnowledgeChunk]:
     chunks = []
+    cross_reference_pattern = re.compile(r"\(see\s+([^)]+)\)", re.IGNORECASE)
+    token_pattern = re.compile(r"\w+|[^\w\s]")
     for path in sorted(documents_dir.glob("*.md")):
         text = path.read_text(encoding="utf-8")
         title = next(
@@ -38,7 +44,7 @@ def load_chunks(documents_dir: Path) -> list[KnowledgeChunk]:
             path.stem,
         )
         sections = re.split(r"(?m)^##\s+", text)
-        for section in sections[1:]:
+        for chunk_index, section in enumerate(sections[1:]):
             heading, _, body = section.partition("\n")
             body = body.strip()
             if not heading.strip() or not body:
@@ -50,6 +56,7 @@ def load_chunks(documents_dir: Path) -> list[KnowledgeChunk]:
                     f"No category mapping for knowledge document: {path.name}"
                 )
             chunk_key = f"{path.name}:{heading}:{body}"
+            embedding_text = f"{title}\n{heading}\n{body}"
             chunks.append(
                 KnowledgeChunk(
                     point_id=str(uuid5(NAMESPACE_URL, chunk_key)),
@@ -58,10 +65,17 @@ def load_chunks(documents_dir: Path) -> list[KnowledgeChunk]:
                     section_heading=heading,
                     heading_path=heading,
                     body=body,
-                    embedding_text=f"{title}\n{heading}\n{body}",
+                    embedding_text=embedding_text,
                     score=0.0,
                     primary_category=categories[0],
                     categories=list(categories),
+                    cross_references=[
+                        reference.strip().rstrip(".,")
+                        for reference in cross_reference_pattern.findall(body)
+                    ],
+                    chunk_index=chunk_index,
+                    token_count=len(token_pattern.findall(embedding_text)),
+                    source_path=path.relative_to(documents_dir).as_posix(),
                 )
             )
     return chunks
@@ -69,7 +83,9 @@ def load_chunks(documents_dir: Path) -> list[KnowledgeChunk]:
 
 def corpus_hash(chunks: list[KnowledgeChunk]) -> str:
     contents = "\n".join(
-        f"{chunk.document_id}:{chunk.document_title}:{chunk.section_heading}:{chunk.body}:{','.join(chunk.categories)}"
+        f"{chunk.document_id}:{chunk.document_title}:{chunk.section_heading}:{chunk.body}:"
+        f"{','.join(chunk.categories)}:{','.join(chunk.cross_references)}:"
+        f"{chunk.chunk_index}:{chunk.token_count}:{chunk.source_path}"
         for chunk in chunks
     )
     return hashlib.sha256(contents.encode("utf-8")).hexdigest()
@@ -180,6 +196,10 @@ class QdrantKnowledgeStore:
                     "body": chunk.body,
                     "primary_category": chunk.primary_category,
                     "categories": chunk.categories,
+                    "cross_references": chunk.cross_references,
+                    "chunk_index": chunk.chunk_index,
+                    "token_count": chunk.token_count,
+                    "source_path": chunk.source_path,
                 },
             )
             for chunk, vector in zip(chunks, vectors, strict=True)

@@ -9,7 +9,7 @@ Stack: Python 3.11, PydanticAI/Pydantic, OpenRouter, sentence-transformers, and 
 Prerequisites: Python 3.11, [uv](https://docs.astral.sh/uv/), and Docker Desktop.
 
 1. From the repository root, install the app and test dependencies: `uv sync --extra dev`.
-2. Set the OpenRouter API key and model IDs in the existing `.env` file. The API reads `.env` directly.
+2. Set `OPENROUTER_API_KEY`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID` in the existing `.env` file. `AGENT_MAX_STEPS` is optional and defaults to `4`. The API reads `.env` directly.
 3. Start Qdrant: `docker compose up -d qdrant`.
 4. Start the API: `uv run uvicorn sungrid.api:app --reload`.
 
@@ -20,7 +20,7 @@ The API indexes the fixed `docs/` folder when it starts and reuses the index whi
 Open `http://localhost:8000/docs` to try the API.
 
 - `POST /ingest` indexes the fixed `docs/` folder and returns the chunk count.
-- `POST /agent/run` accepts `{"question": "When is my bill due?"}` and returns an answer with sources. Send the returned `chat_state` in the next request to continue a multi-turn eligibility check.
+- `POST /agent/run` accepts `{"question": "When is my bill due?"}` and returns an answer with sources. Send the returned `chat_state` in the next request to continue a multi-turn eligibility check. It contains an opaque session ID; pending eligibility facts stay in process memory and are cleared when the check finishes. Restarting the API expires pending sessions.
 
 ## Document categories
 

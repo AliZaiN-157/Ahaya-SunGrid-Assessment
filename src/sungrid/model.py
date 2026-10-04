@@ -12,13 +12,24 @@ from pydantic_ai import Agent, ModelRetry, RunContext, UsageLimits
 from pydantic_ai.models.openrouter import OpenRouterModel
 from pydantic_ai.providers.openrouter import OpenRouterProvider
 
-from sungrid.chat import RetrievedChunk
+from sungrid.chat import RetrievedChunk, record_model_retry, record_model_usage
 from sungrid.eligibility import EligibilityFacts, EligibilityResult
 from sungrid.taxonomy import CATEGORIES, Classification
 
 
 _T = TypeVar("_T")
 logger = logging.getLogger("sungrid.models")
+DEFAULT_AGENT_MAX_STEPS = 4
+
+
+def agent_usage_limits() -> UsageLimits:
+    try:
+        max_steps = int(os.getenv("AGENT_MAX_STEPS", str(DEFAULT_AGENT_MAX_STEPS)))
+    except ValueError as exc:
+        raise ValueError("AGENT_MAX_STEPS must be a positive integer.") from exc
+    if max_steps < 1:
+        raise ValueError("AGENT_MAX_STEPS must be a positive integer.")
+    return UsageLimits(request_limit=max_steps, tool_calls_limit=max_steps)
 
 
 def retry_model_call(
@@ -35,6 +46,7 @@ def retry_model_call(
             ) or (status in (408, 429) or (isinstance(status, int) and status >= 500))
             if not transient or attempt == 2:
                 raise
+            record_model_retry()
             delay = 0.25 * (2**attempt)
             logger.warning(
                 json.dumps(
@@ -72,6 +84,7 @@ class EligibilityRun:
 
 
 def create_classifier():
+    agent_usage_limits()
     api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     model_id = os.getenv("CLASSIFIER_MODEL_ID", "").strip()
     if not api_key:
@@ -86,14 +99,17 @@ def create_classifier():
     )
 
     def classify(question: str) -> Classification:
-        return retry_model_call(
-            lambda: agent.run_sync(question, usage_limits=UsageLimits(request_limit=4))
-        ).output
+        result = retry_model_call(
+            lambda: agent.run_sync(question, usage_limits=agent_usage_limits())
+        )
+        record_model_usage(result.usage)
+        return result.output
 
     return classify
 
 
 def create_answerer():
+    agent_usage_limits()
     api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     model_id = os.getenv("ANSWER_MODEL_ID", "").strip()
     if not api_key:
@@ -113,15 +129,17 @@ def create_answerer():
         result = retry_model_call(
             lambda: agent.run_sync(
                 f"Question: {question}\n\nDocument excerpts:\n{excerpts}",
-                usage_limits=UsageLimits(request_limit=4),
+                usage_limits=agent_usage_limits(),
             )
         )
+        record_model_usage(result.usage)
         return str(result.output)
 
     return answer
 
 
 def create_eligibility_checker():
+    agent_usage_limits()
     import sys
     from pathlib import Path
 
@@ -185,13 +203,14 @@ def create_eligibility_checker():
 
     def check(facts: EligibilityFacts) -> EligibilityResult:
         run_state = EligibilityRun(facts=facts)
-        retry_model_call(
+        result = retry_model_call(
             lambda: agent.run_sync(
                 f"Check these validated member facts, using the eligibility tool exactly as shown: {facts.model_dump_json()}",
                 deps=run_state,
-                usage_limits=UsageLimits(request_limit=4),
+                usage_limits=agent_usage_limits(),
             )
         )
+        record_model_usage(result.usage)
         if run_state.result is None:
             raise RuntimeError("Eligibility agent did not call the eligibility tool.")
         return run_state.result

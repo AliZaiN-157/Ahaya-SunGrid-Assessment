@@ -1,9 +1,15 @@
+import json
+
+import httpx
+from pydantic_ai.usage import RunUsage
+
 from sungrid.chat import (
     ChatServices,
     ChatState,
     Classification,
     RetrievedChunk,
     handle_chat_message,
+    record_model_usage,
 )
 from sungrid.eligibility import EligibilityResult
 
@@ -208,6 +214,10 @@ def test_supplied_eligibility_facts_are_checked_without_guessing():
     assert reply.outcome == "eligible"
     assert "$2,000" in reply.answer
     assert "estimate" in reply.answer.lower()
+    assert (
+        reply.sources[0].document_title
+        == "SunGrid Cooperative — Incentive & Rebate Programs"
+    )
     assert reply.sources[0].section_heading == "Rooftop Rebate Program"
 
 
@@ -291,6 +301,44 @@ def test_model_failure_is_safe_and_logs_no_raw_question(caplog):
     assert "secret traceback" not in caplog.text
     assert "request_id" in caplog.text
     assert "total_latency_ms" in caplog.text
+
+
+def test_request_log_includes_retry_and_token_usage(caplog):
+    from sungrid.model import retry_model_call
+
+    caplog.set_level("INFO", logger="sungrid.requests")
+    attempts = []
+
+    def classify(question):
+        def call():
+            if not attempts:
+                attempts.append(True)
+                raise httpx.ConnectError("temporary")
+            record_model_usage(
+                RunUsage(requests=2, input_tokens=12, output_tokens=4, cost=0.001)
+            )
+            return Classification(
+                primary_category="billing_account",
+                confidence=0.9,
+                eligibility_intent=False,
+            )
+
+        return retry_model_call(call, sleep=lambda _: None)
+
+    services_ = services(lambda question, category: [chunk()])
+    services_.classify = classify
+
+    reply = handle_chat_message("When is my bill due?", services_)
+    event = json.loads(
+        next(record.message for record in caplog.records if record.name == "sungrid.requests")
+    )
+
+    assert reply.outcome == "answered"
+    assert event["retry_count"] == 1
+    assert event["model_requests"] == 2
+    assert event["input_tokens"] == 12
+    assert event["output_tokens"] == 4
+    assert event["reported_cost_usd"] == 0.001
 
 
 def test_retrieval_failure_does_not_show_exception():

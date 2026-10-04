@@ -19,6 +19,30 @@ UNSUPPORTED = "I couldn't find information about that in the SunGrid documents."
 MAX_QUESTION_LENGTH = 2000
 logger = logging.getLogger("sungrid.requests")
 request_started = ContextVar("request_started", default=0.0)
+request_metrics: ContextVar[dict[str, int | float] | None] = ContextVar(
+    "request_metrics", default=None
+)
+
+
+def record_model_retry() -> None:
+    metrics = request_metrics.get()
+    if metrics is not None:
+        metrics["retry_count"] += 1
+
+
+def record_model_usage(usage) -> None:
+    metrics = request_metrics.get()
+    if metrics is None:
+        return
+    requests = int(getattr(usage, "requests", 0) or 0)
+    metrics["model_requests"] += requests
+    for name in ("input_tokens", "output_tokens", "total_tokens"):
+        metrics[name] += int(getattr(usage, name, 0) or 0)
+    cost = getattr(usage, "cost", None)
+    if cost is not None:
+        metrics["reported_cost_usd"] = float(
+            metrics.get("reported_cost_usd", 0.0)
+        ) + float(cost)
 
 
 class RetrievedChunk(BaseModel):
@@ -59,6 +83,15 @@ def handle_chat_message(
     state = state if state is not None else ChatState()
     request_id = str(uuid4())
     request_started.set(time.perf_counter())
+    request_metrics.set(
+        {
+            "retry_count": 0,
+            "model_requests": 0,
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+        }
+    )
     if not question.strip():
         return _finish(
             request_id,
@@ -243,7 +276,7 @@ def _eligibility_or_request_more(
     state.eligibility_pending = False
     state.eligibility_facts = EligibilityFacts()
     source = Source(
-        document_title="SunGrid Cooperative - Incentive & Rebate Programs",
+        document_title="SunGrid Cooperative — Incentive & Rebate Programs",
         section_heading="Rooftop Rebate Program",
     )
     if result.eligible:
@@ -279,5 +312,9 @@ def _finish(request_id: str, reply: ChatReply, **details) -> ChatReply:
         event["applied_filter"] = (
             None if details.get("widened") else details["category"]
         )
+    metrics = request_metrics.get()
+    if metrics is not None:
+        event.update(metrics)
     logger.info(json.dumps(event, sort_keys=True))
+    request_metrics.set(None)
     return reply

@@ -1,7 +1,9 @@
 from fastapi.testclient import TestClient
 
 from sungrid import api
-from sungrid.chat import ChatReply
+from sungrid.chat import ChatReply, ChatServices
+from sungrid.eligibility import EligibilityResult
+from sungrid.taxonomy import Classification
 
 
 client = TestClient(api.app)
@@ -57,15 +59,61 @@ def test_agent_endpoint_returns_answer_and_sources(monkeypatch):
         "answer": "Answer to: When is my bill due?",
         "sources": [],
         "outcome": "answered",
-        "chat_state": {
-            "eligibility_pending": False,
-            "eligibility_facts": {
-                "household_zip": None,
-                "annual_income_usd": None,
-                "system_size_kw": None,
-                "installer_approved": None,
-            },
+        "chat_state": {"session_id": None},
+    }
+
+
+def test_agent_endpoint_keeps_eligibility_facts_out_of_client_state(monkeypatch):
+    services = ChatServices(
+        classify=lambda question: Classification(
+            primary_category="incentive_rebate",
+            confidence=0.95,
+            eligibility_intent=True,
+        ),
+        search=lambda question, category: [],
+        answer=lambda question, chunks: "unused",
+        check_eligibility=lambda facts: EligibilityResult(
+            eligible=True, reason="Checks passed.", estimated_rebate_usd=2000
+        ),
+    )
+    monkeypatch.setattr(api, "create_chat_services", lambda: services)
+
+    first = client.post("/agent/run", json={"question": "Am I eligible?"})
+    returned_state = first.json()["chat_state"]
+
+    assert first.json()["outcome"] == "needs_more_input"
+    assert returned_state["session_id"]
+    assert "eligibility_facts" not in returned_state
+    assert "94101" not in first.text
+
+    second = client.post(
+        "/agent/run",
+        json={
+            "question": "ZIP 94101, annual income $80,000, system size 5 kW, installer approved",
+            "chat_state": returned_state,
         },
+    )
+
+    assert second.status_code == 200
+    assert second.json()["outcome"] == "eligible"
+    assert second.json()["chat_state"] == {"session_id": None}
+
+    expired = client.post(
+        "/agent/run",
+        json={"question": "Continue", "chat_state": returned_state},
+    )
+    assert expired.status_code == 400
+
+
+def test_agent_endpoint_rejects_expired_eligibility_session():
+    response = client.post(
+        "/agent/run",
+        json={"question": "Continue", "chat_state": {"session_id": "unknown"}},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": "This eligibility session expired. Please start the check again."
     }
 
 
