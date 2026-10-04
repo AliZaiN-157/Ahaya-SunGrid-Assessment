@@ -25,3 +25,5 @@ Open `http://localhost:8000/docs` to try the API.
 ## Document categories
 
 The rebate refund and billing adjustment notice is primarily **Incentive & Rebate Programs** and is also tagged **Billing & Account**, so either category search can find it.
+
+The assessment's Part C design write-up is in [docs/part_c_design.md](docs/part_c_design.md).
