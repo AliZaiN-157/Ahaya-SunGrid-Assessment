@@ -154,7 +154,7 @@ def test_qdrant_search_filters_category_membership():
             return []
 
     client = FakeClient()
-    store = QdrantKnowledgeStore(client, "bge-small-en-v1.5")
+    store = QdrantKnowledgeStore(client, "openai/text-embedding-3-small")
     for category in ("incentive_rebate", "billing_account"):
         store.search([0.0], category)
         assert client.query_filter.must[1].key == "categories"

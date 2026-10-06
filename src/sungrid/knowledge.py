@@ -1,8 +1,10 @@
 import hashlib
+import os
 import re
 from pathlib import Path
 from uuid import NAMESPACE_URL, uuid5
 
+import httpx
 from pydantic import BaseModel
 
 from sungrid.chat import RetrievedChunk
@@ -108,45 +110,62 @@ def corpus_hash(chunks: list[KnowledgeChunk]) -> str:
     return hashlib.sha256(contents.encode("utf-8")).hexdigest()
 
 
-class LocalEmbeddings:
-    MODELS = {
-        "all-MiniLM-L6-v2": "sentence-transformers/all-MiniLM-L6-v2",
-        "bge-small-en-v1.5": "BAAI/bge-small-en-v1.5",
-        "nomic-embed-text-v1.5": "nomic-ai/nomic-embed-text-v1.5",
-    }
+class OpenRouterEmbeddings:
+    DEFAULT_MODEL = "openai/text-embedding-3-small"
+    DIMENSIONS = 1536
+    ENDPOINT = "https://openrouter.ai/api/v1/embeddings"
 
-    def __init__(self, model_choice: str = "bge-small-en-v1.5") -> None:
-        if model_choice not in self.MODELS:
-            raise ValueError(f"Unknown embedding model: {model_choice}")
-
-        from sentence_transformers import SentenceTransformer
-
-        model_id = self.MODELS[model_choice]
-        self.model = SentenceTransformer(
-            model_id,
-            trust_remote_code=model_choice == "nomic-embed-text-v1.5",
+    def __init__(
+        self,
+        model_id: str = DEFAULT_MODEL,
+        api_key: str | None = None,
+        client: httpx.Client | None = None,
+    ) -> None:
+        api_key = (
+            os.getenv("OPENROUTER_API_KEY", "") if api_key is None else api_key
         )
-        self.model_id = model_id
-        self.model_choice = model_choice
-        dimensions = self.model.get_sentence_embedding_dimension()
-        if dimensions is None:
-            raise RuntimeError(
-                f"Embedding model '{model_id}' did not report its vector size."
+        if not api_key.strip():
+            raise ValueError(
+                "Set OPENROUTER_API_KEY in .env before starting the API service."
             )
-        self.dimensions = int(dimensions)
+
+        self.model_id = model_id
+        self.dimensions = self.DIMENSIONS
+        self.api_key = api_key.strip()
+        self.client = client or httpx.Client(timeout=30)
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        if self.model_choice == "nomic-embed-text-v1.5":
-            texts = [f"search_document: {text}" for text in texts]
-        vectors = self.model.encode(texts, normalize_embeddings=True)
-        return vectors.tolist()
+        if not texts:
+            return []
+
+        from sungrid.model import retry_model_call
+
+        def request():
+            response = self.client.post(
+                self.ENDPOINT,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                json={
+                    "model": self.model_id,
+                    "input": texts,
+                    "dimensions": self.dimensions,
+                },
+            )
+            response.raise_for_status()
+            return response
+
+        response = retry_model_call(request)
+        items = response.json()["data"]
+        if len(items) != len(texts):
+            raise RuntimeError(
+                "OpenRouter returned an unexpected number of embeddings."
+            )
+        return [
+            item["embedding"]
+            for item in sorted(items, key=lambda item: item["index"])
+        ]
 
     def embed_query(self, text: str) -> list[float]:
-        if self.model_choice == "bge-small-en-v1.5":
-            text = f"Represent this sentence for searching relevant passages: {text}"
-        elif self.model_choice == "nomic-embed-text-v1.5":
-            text = f"search_query: {text}"
-        return self.model.encode(text, normalize_embeddings=True).tolist()
+        return self.embed_documents([text])[0]
 
 
 class QdrantKnowledgeStore:
@@ -270,7 +289,7 @@ class QdrantKnowledgeStore:
 
 def ensure_index(
     chunks: list[KnowledgeChunk],
-    embeddings: LocalEmbeddings,
+    embeddings: OpenRouterEmbeddings,
     store: QdrantKnowledgeStore,
 ) -> None:
     manifest = IndexManifest(

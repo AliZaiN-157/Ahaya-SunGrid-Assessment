@@ -2,14 +2,14 @@
 
 A small FastAPI service that answers questions from the fixed SunGrid documents and checks rooftop rebate eligibility.
 
-Stack: Python 3.11, PydanticAI/Pydantic, OpenRouter, sentence-transformers, and Docker Qdrant.
+Stack: Python 3.11, PydanticAI/Pydantic, OpenRouter embeddings and LLMs, and Docker Qdrant.
 
 ## Run locally
 
 Prerequisites: Python 3.11, [uv](https://docs.astral.sh/uv/), and Docker Desktop.
 
 1. From the repository root, install the app and test dependencies: `uv sync --extra dev`.
-2. Set `OPENROUTER_API_KEY`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID` in the existing `.env` file. `AGENT_MAX_STEPS` is optional and defaults to `4`. The API reads `.env` directly.
+2. Set `OPENROUTER_API_KEY`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID` in the existing `.env` file. `EMBEDDING_MODEL` defaults to `openai/text-embedding-3-small`; `AGENT_MAX_STEPS` defaults to `4`. The API reads `.env` directly.
 3. Start Qdrant: `docker compose up -d qdrant`.
 4. Start the API: `uv run uvicorn sungrid.api:app --reload`.
 
@@ -26,4 +26,4 @@ Open `http://localhost:8000/docs` to try the API.
 
 The rebate refund and billing adjustment notice is primarily **Incentive & Rebate Programs** and is also tagged **Billing & Account**, so either category search can find it.
 
-The assessment's Part C design write-up is in [docs/part_c_design.md](docs/part_c_design.md).
+The assessment's Part C design write-up is in [PART_C_DESIGN.md](PART_C_DESIGN.md).

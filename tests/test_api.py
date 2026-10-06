@@ -30,7 +30,10 @@ def test_ingest_endpoint_reports_indexed_chunks(monkeypatch):
 
 def test_ingest_endpoint_returns_service_unavailable_when_indexing_fails(monkeypatch):
     def fail_to_index():
-        raise RuntimeError("Could not build the local document index.")
+        raise RuntimeError(
+            "Could not build the document index. Check OPENROUTER_API_KEY, "
+            "EMBEDDING_MODEL, OpenRouter connectivity, and Qdrant."
+        )
 
     monkeypatch.setattr(api, "ingest_documents", fail_to_index)
 
@@ -38,7 +41,8 @@ def test_ingest_endpoint_returns_service_unavailable_when_indexing_fails(monkeyp
 
     assert response.status_code == 503
     assert response.json() == {
-        "detail": "Could not build the local document index."
+        "detail": "Could not build the document index. Check OPENROUTER_API_KEY, "
+        "EMBEDDING_MODEL, OpenRouter connectivity, and Qdrant."
     }
 
 

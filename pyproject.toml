@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "SunGrid Cooperative Copilot - RAG + agent over 14 KB docs"
 requires-python = ">=3.11,<4.0"
 dependencies = [
-    "sentence-transformers>=5.0.0,<6.0.0",
     "qdrant-client>=1.9.0,<1.11.0",
     "pydantic>=2.6.0,<3.0.0",
     "pydantic-ai-slim[openrouter]>=2.0.0,<3.0.0",

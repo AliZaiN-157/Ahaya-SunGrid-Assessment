@@ -7,7 +7,7 @@ from qdrant_client import QdrantClient
 
 from sungrid.chat import ChatServices
 from sungrid.knowledge import (
-    LocalEmbeddings,
+    OpenRouterEmbeddings,
     QdrantKnowledgeStore,
     ensure_index,
     load_chunks,
@@ -20,8 +20,10 @@ load_dotenv(PROJECT_ROOT / ".env", override=False)
 
 
 @lru_cache(maxsize=1)
-def knowledge_components() -> tuple[LocalEmbeddings, QdrantKnowledgeStore]:
-    model_choice = os.getenv("EMBEDDING_MODEL", "bge-small-en-v1.5")
+def knowledge_components() -> tuple[OpenRouterEmbeddings, QdrantKnowledgeStore]:
+    model_id = os.getenv(
+        "EMBEDDING_MODEL", OpenRouterEmbeddings.DEFAULT_MODEL
+    ).strip()
     try:
         client = QdrantClient(
             url=os.getenv("QDRANT_URL", "http://localhost:6333"),
@@ -36,14 +38,14 @@ def knowledge_components() -> tuple[LocalEmbeddings, QdrantKnowledgeStore]:
         ) from exc
 
     try:
-        embeddings = LocalEmbeddings(model_choice)
+        embeddings = OpenRouterEmbeddings(model_id=model_id)
     except Exception as exc:
         raise RuntimeError(
-            f"Could not load embedding model '{model_choice}'. "
-            "Check the model name and internet connection."
+            f"Could not initialize OpenRouter embedding model '{model_id}'. "
+            "Check OPENROUTER_API_KEY, the model name, and the connection."
         ) from exc
 
-    return embeddings, QdrantKnowledgeStore(client, model_choice)
+    return embeddings, QdrantKnowledgeStore(client, model_id)
 
 
 def ingest_documents() -> int:
@@ -56,8 +58,8 @@ def ingest_documents() -> int:
         ensure_index(chunks, embeddings, store)
     except Exception as exc:
         raise RuntimeError(
-            "Could not build the local document index. "
-            "Check the embedding download and Qdrant."
+            "Could not build the document index. Check OPENROUTER_API_KEY, "
+            "EMBEDDING_MODEL, OpenRouter connectivity, and Qdrant."
         ) from exc
     return len(chunks)
 
