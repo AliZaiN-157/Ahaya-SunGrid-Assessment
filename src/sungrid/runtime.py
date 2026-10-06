@@ -72,8 +72,8 @@ def create_chat_services() -> ChatServices:
     embeddings, store = knowledge_components()
     return ChatServices(
         classify=classify,
-        search=lambda question, category: store.search(
-            embeddings.embed_query(question), category
+        search=lambda question, categories: store.search(
+            embeddings.embed_query(question), categories
         ),
         answer=answer,
         check_eligibility=check_eligibility,

@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
 from sungrid.eligibility import EligibilityFacts, EligibilityResult, collect_facts
-from sungrid.taxonomy import Classification
+from sungrid.taxonomy import Classification, SearchCategory
 
 
 MIN_CONFIDENCE = 0.60
@@ -73,7 +73,7 @@ class ChatState(BaseModel):
 @dataclass
 class ChatServices:
     classify: Callable[[str], Classification]
-    search: Callable[[str, str | None], list[RetrievedChunk]]
+    search: Callable[[str, list[SearchCategory] | None], list[RetrievedChunk]]
     answer: Callable[[str, list[RetrievedChunk]], str]
     check_eligibility: Callable[[EligibilityFacts], EligibilityResult]
 
@@ -149,8 +149,18 @@ def handle_chat_message(
         state.eligibility_facts = collect_facts(state.eligibility_facts, question)
         return _eligibility_or_request_more(services, state, request_id, classification)
 
+    search_categories: list[SearchCategory] = list(
+        dict.fromkeys(
+            category
+            for category in (
+                classification.primary_category,
+                *classification.related_categories,
+            )
+            if category != "non_relevant"
+        )
+    )
     try:
-        chunks = services.search(question, classification.primary_category)
+        chunks = services.search(question, search_categories)
     except Exception as exc:
         return _finish(
             request_id,
@@ -160,6 +170,7 @@ def handle_chat_message(
                 outcome="error",
             ),
             category=classification.primary_category,
+            searched_categories=search_categories,
             error_type=type(exc).__name__,
         )
     widened = not chunks or chunks[0].score < MIN_RELEVANCE
@@ -176,6 +187,7 @@ def handle_chat_message(
                 ),
                 category=classification.primary_category,
                 widened=True,
+                searched_categories=search_categories,
                 error_type=type(exc).__name__,
             )
     if not chunks or chunks[0].score < MIN_RELEVANCE:
@@ -183,6 +195,7 @@ def handle_chat_message(
             request_id,
             ChatReply(answer=UNSUPPORTED, sources=[], outcome="unsupported"),
             category=classification.primary_category,
+            searched_categories=search_categories,
             widened=widened,
         )
 
@@ -197,6 +210,7 @@ def handle_chat_message(
                 outcome="error",
             ),
             category=classification.primary_category,
+            searched_categories=search_categories,
             widened=widened,
             error_type=type(exc).__name__,
         )
@@ -218,6 +232,7 @@ def handle_chat_message(
         request_id,
         ChatReply(answer=answer, sources=sources),
         category=classification.primary_category,
+        searched_categories=search_categories,
         confidence=classification.confidence,
         widened=widened,
         path="knowledge",
@@ -311,7 +326,9 @@ def _finish(request_id: str, reply: ChatReply, **details) -> ChatReply:
     }
     if "category" in details:
         event["applied_filter"] = (
-            None if details.get("widened") else details["category"]
+            None
+            if details.get("widened")
+            else details.get("searched_categories", details["category"])
         )
     metrics = request_metrics.get()
     if metrics is not None:

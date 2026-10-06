@@ -10,12 +10,19 @@ from sungrid.chat import ChatServices, RetrievedChunk, handle_chat_message, requ
 from sungrid.eligibility import EligibilityResult
 from sungrid.taxonomy import Classification
 from sungrid.model import (
+    SYSTEM_PROMPT,
     agent_usage_limits,
     count_model_retries,
     create_classifier,
     retry_model_call,
     run_agent,
 )
+
+
+def test_answer_prompt_requires_source_support_and_separates_processes():
+    assert "do not infer details" in SYSTEM_PROMPT
+    assert "explain them separately" in SYSTEM_PROMPT
+    assert "do not imply one caused" in SYSTEM_PROMPT
 
 
 def test_missing_api_key_message_points_to_env_and_api(monkeypatch):

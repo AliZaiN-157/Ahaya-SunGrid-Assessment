@@ -52,11 +52,38 @@ def test_searches_primary_category_and_returns_citation():
 
     reply = handle_chat_message("When is my bill due?", services_)
 
-    assert seen == ["billing_account"]
+    assert seen == [["billing_account"]]
     assert reply.answer.startswith("Bills arrive")
     assert [(s.document_title, s.section_heading) for s in reply.sources] == [
         ("Billing FAQs", "When are bills issued?")
     ]
+
+
+def test_multi_topic_question_searches_both_categories_and_cites_both_documents():
+    searched_categories = []
+    rebate = chunk(title="Rebate Refund & Billing Adjustment Notice")
+    billing = chunk(title="Billing & Account FAQs")
+    classification = Classification(
+        primary_category="incentive_rebate",
+        related_categories=["billing_account"],
+        confidence=0.9,
+        eligibility_intent=False,
+    )
+
+    def search(question, categories):
+        searched_categories.extend(categories)
+        return [rebate, billing]
+
+    reply = handle_chat_message(
+        "My rebate is delayed and there is a billing adjustment. What should I do?",
+        services(search, classification),
+    )
+
+    assert searched_categories == ["incentive_rebate", "billing_account"]
+    assert {source.document_title for source in reply.sources} == {
+        "Rebate Refund & Billing Adjustment Notice",
+        "Billing & Account FAQs",
+    }
 
 
 def test_low_confidence_asks_for_clarification_without_search():
@@ -102,7 +129,7 @@ def test_weak_filtered_search_widens_once_and_discloses_it():
 
     reply = handle_chat_message("How is my rebate reversal billed?", services(search))
 
-    assert calls == ["billing_account", None]
+    assert calls == [["billing_account"], None]
     assert "broadened the search" in reply.answer
     assert (
         reply.sources[0].document_title == "Rebate Refund & Billing Adjustment Notice"
@@ -156,9 +183,66 @@ def test_qdrant_search_filters_category_membership():
     client = FakeClient()
     store = QdrantKnowledgeStore(client, "openai/text-embedding-3-small")
     for category in ("incentive_rebate", "billing_account"):
-        store.search([0.0], category)
+        store.search([0.0], [category])
         assert client.query_filter.must[1].key == "categories"
         assert client.query_filter.must[1].match.value == category
+
+
+def test_qdrant_multi_category_search_keeps_results_from_each_document():
+    from types import SimpleNamespace
+    from qdrant_client import models
+
+    from sungrid.knowledge import QdrantKnowledgeStore
+
+    class FakeClient:
+        searches = []
+
+        def search(self, **kwargs):
+            condition = kwargs["query_filter"].must[1]
+            assert condition.key == "categories"
+            assert isinstance(condition.match, models.MatchValue)
+            category = condition.match.value
+            self.searches.append((category, kwargs["limit"]))
+            hits = [
+                SimpleNamespace(
+                    id=f"ambiguous-{index}",
+                    payload={
+                        "document_title": "Rebate Refund & Billing Adjustment Notice",
+                        "section_heading": f"Section {index}",
+                        "body": "Billing adjustment text.",
+                    },
+                    score=1 - index / 100,
+                )
+                for index in range(4)
+            ]
+            if category == "billing_account":
+                hits.append(
+                    SimpleNamespace(
+                        id="billing-faq",
+                        payload={
+                            "document_title": "Billing & Account FAQs",
+                            "section_heading": "My rebate has not appeared",
+                            "body": "Contact the Incentive Program committee.",
+                        },
+                        score=0.95,
+                    )
+                )
+            return hits
+
+    client = FakeClient()
+    store = QdrantKnowledgeStore(client, "openai/text-embedding-3-small")
+
+    results = store.search([0.0], ["incentive_rebate", "billing_account"])
+
+    assert client.searches == [("incentive_rebate", 8), ("billing_account", 8)]
+    assert {chunk.document_title for chunk in results} == {
+        "Rebate Refund & Billing Adjustment Notice",
+        "Billing & Account FAQs",
+    }
+    assert sum(
+        chunk.document_title == "Rebate Refund & Billing Adjustment Notice"
+        for chunk in results
+    ) <= 2
 
 
 def test_eligibility_question_requests_all_missing_facts():

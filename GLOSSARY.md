@@ -7,8 +7,14 @@ knowledge base and checks rooftop-rebate eligibility.
 
 **Primary category**:
 The single SunGrid knowledge area that best matches a member question and limits
-which knowledge-base material is searched.
+which knowledge-base material is searched. A question may also have related
+categories when it needs evidence from more than one area.
 _Avoid_: Route, intent
+
+**Related category**:
+An additional searchable knowledge area needed to answer another part of the same
+question. It expands the retrieval filter without changing the primary category.
+_Avoid_: Secondary route, unrelated category
 
 **Eligibility intent**:
 A member's request to determine whether a household qualifies for the Rooftop
@@ -26,7 +32,7 @@ classified confidently.
 _Avoid_: Guess, fallback answer
 
 **Retrieval filter**:
-A primary-category limit applied while searching the SunGrid knowledge base.
+A limit to the primary category and any related categories selected for a question.
 _Avoid_: Route, agent branch
 
 **Filter widening**:

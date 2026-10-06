@@ -8,7 +8,7 @@ import httpx
 from pydantic import BaseModel
 
 from sungrid.chat import RetrievedChunk
-from sungrid.taxonomy import DOCUMENT_CATEGORIES
+from sungrid.taxonomy import DOCUMENT_CATEGORIES, SearchCategory
 
 
 class KnowledgeChunk(RetrievedChunk):
@@ -253,9 +253,37 @@ class QdrantKnowledgeStore:
         )
 
     def search(
-        self, vector: list[float], category: str | None = None, limit: int = 4
+        self,
+        vector: list[float],
+        categories: list[SearchCategory] | None = None,
+        limit: int = 4,
     ) -> list[RetrievedChunk]:
         from qdrant_client import models
+
+        categories = list(dict.fromkeys(categories or []))
+        if len(categories) > 1:
+            candidates: dict[str, RetrievedChunk] = {}
+            candidate_limit = limit * len(categories)
+            for selected_category in categories:
+                for chunk in self.search(
+                    vector, [selected_category], candidate_limit
+                ):
+                    key = chunk.chunk_id or (
+                        f"{chunk.document_title}:{chunk.section_heading}"
+                    )
+                    candidates[key] = chunk
+
+            document_counts: dict[str, int] = {}
+            diverse_chunks = []
+            for chunk in sorted(
+                candidates.values(), key=lambda item: item.score, reverse=True
+            ):
+                count = document_counts.get(chunk.document_title, 0)
+                if count < 2:
+                    diverse_chunks.append(chunk)
+                    document_counts[chunk.document_title] = count + 1
+            return diverse_chunks[:candidate_limit]
+        category = categories[0] if categories else None
 
         filters: list[models.Condition] = [
             models.FieldCondition(

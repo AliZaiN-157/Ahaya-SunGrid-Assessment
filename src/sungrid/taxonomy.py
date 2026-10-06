@@ -10,14 +10,14 @@ CATEGORIES = (
     "technical_installation",
     "company_updates",
 )
-Category = Literal[
+SearchCategory = Literal[
     "program_policies",
     "incentive_rebate",
     "billing_account",
     "technical_installation",
     "company_updates",
-    "non_relevant",
 ]
+Category = SearchCategory | Literal["non_relevant"]
 
 DOCUMENT_CATEGORIES: dict[str, tuple[str, ...]] = {
     "01_program_policies": ("program_policies",),
@@ -39,5 +39,6 @@ DOCUMENT_CATEGORIES: dict[str, tuple[str, ...]] = {
 
 class Classification(BaseModel):
     primary_category: Category
+    related_categories: list[SearchCategory] = Field(default_factory=list, max_length=4)
     confidence: float = Field(ge=0, le=1)
     eligibility_intent: bool
