@@ -32,6 +32,18 @@ ENV/
 *.key
 *.pem
 
+# Local assessment and agent workspace
+AGENTS.md
+GLOSSARY.md
+.agents/
+.archify/
+.claude/
+.scratch/
+reports/
+skills-lock.json
+.env.example
+tests/
+
 # Qdrant runtime (Docker volume - local database directory)
 qdrant_storage/
 
