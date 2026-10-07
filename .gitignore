@@ -33,6 +33,7 @@ ENV/
 *.pem
 
 # Local assessment and agent workspace
+docs/
 AGENTS.md
 GLOSSARY.md
 .agents/

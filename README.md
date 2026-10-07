@@ -10,8 +10,9 @@ Prerequisites: Python 3.11, [uv](https://docs.astral.sh/uv/), and Docker Desktop
 
 1. From the repository root, install the app and test dependencies: `uv sync --extra dev`.
 2. Create a `.env` file in the repository root and set `OPENROUTER_API_KEY`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID`. `EMBEDDING_MODEL` defaults to `openai/text-embedding-3-small`; `AGENT_MAX_STEPS` defaults to `4`. The application reads `.env` directly.
-3. Start Qdrant: `docker compose up -d qdrant`.
-4. Choose a demo:
+3. Place the private SunGrid Markdown knowledge files in a local `docs/` folder. They are required for indexing and are not included in this repository.
+4. Start Qdrant: `docker compose up -d qdrant`.
+5. Choose a demo:
    - Terminal chat: `uv run python -m sungrid.terminal`
    - API service: `uv run uvicorn sungrid.api:app --reload`
 

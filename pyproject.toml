@@ -26,7 +26,7 @@ build-backend = "hatchling.build"
 package = true
 
 [tool.hatch.build.targets.sdist]
-include = ["pyproject.toml", "README.md", "stub_tools.py", "docs", "src/sungrid"]
+include = ["pyproject.toml", "README.md", "stub_tools.py", "src/sungrid"]
 
 exclude = ["*.pyc", "__pycache__", ".venv", "qdrant_storage"]
 
