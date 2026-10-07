@@ -1,6 +1,6 @@
 # SunGrid Cooperative Copilot
 
-A small FastAPI service that answers questions from the fixed SunGrid documents and checks rooftop rebate eligibility.
+A small question-answering service and terminal chat that use the fixed SunGrid documents and check rooftop rebate eligibility.
 
 Stack: Python 3.11, PydanticAI/Pydantic, OpenRouter embeddings and LLMs, and Docker Qdrant.
 
@@ -9,11 +9,13 @@ Stack: Python 3.11, PydanticAI/Pydantic, OpenRouter embeddings and LLMs, and Doc
 Prerequisites: Python 3.11, [uv](https://docs.astral.sh/uv/), and Docker Desktop.
 
 1. From the repository root, install the app and test dependencies: `uv sync --extra dev`.
-2. Create a `.env` file in the repository root and set `OPENROUTER_API_KEY`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID`. `EMBEDDING_MODEL` defaults to `openai/text-embedding-3-small`; `AGENT_MAX_STEPS` defaults to `4`. The API reads `.env` directly.
+2. Create a `.env` file in the repository root and set `OPENROUTER_API_KEY`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID`. `EMBEDDING_MODEL` defaults to `openai/text-embedding-3-small`; `AGENT_MAX_STEPS` defaults to `4`. The application reads `.env` directly.
 3. Start Qdrant: `docker compose up -d qdrant`.
-4. Start the API: `uv run uvicorn sungrid.api:app --reload`.
+4. Choose a demo:
+   - Terminal chat: `uv run python -m sungrid.terminal`
+   - API service: `uv run uvicorn sungrid.api:app --reload`
 
-The API indexes the fixed `docs/` folder when it starts and reuses the index while it is current. Run the tests with `uv run pytest`.
+Both demos index the fixed `docs/` folder when they start and reuse the index while it is current. In the terminal chat, type `quit` or `exit` to stop. Run the tests with `uv run pytest`.
 
 ## Assumptions
 
