@@ -6,17 +6,38 @@ Stack: Python 3.11, PydanticAI/Pydantic, OpenRouter embeddings and LLMs, and Doc
 
 ## Run locally
 
-Prerequisites: Python 3.11, [uv](https://docs.astral.sh/uv/), and Docker Desktop.
+Prerequisites: Python 3.11 and Docker Desktop. Choose either [uv](https://docs.astral.sh/uv/) or pip.
 
-1. From the repository root, install the app and test dependencies: `uv sync --extra dev`.
-2. Create a `.env` file in the repository root and set `OPENROUTER_API_KEY`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID`. `EMBEDDING_MODEL` defaults to `openai/text-embedding-3-small`; `AGENT_MAX_STEPS` defaults to `4`. The application reads `.env` directly.
-3. Place the private SunGrid Markdown knowledge files in a local `docs/` folder. They are required for indexing and are not included in this repository.
-4. Start Qdrant: `docker compose up -d qdrant`.
-5. Choose a demo:
-   - Terminal chat: `uv run python -m sungrid.terminal`
-   - API service: `uv run uvicorn sungrid.api:app --reload`
+### Install with uv
 
-Both demos index the fixed `docs/` folder when they start and reuse the index while it is current. In the terminal chat, type `quit` or `exit` to stop. Run the tests with `uv run pytest`.
+From the repository root, install the app and test dependencies:
+
+```powershell
+uv sync --extra dev
+```
+
+### Install with pip
+
+Create and activate a virtual environment from the repository root, then install the app and test dependencies:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e ".[dev]"
+```
+
+On macOS or Linux, activate it with `source .venv/bin/activate` instead.
+
+### Configure and run
+
+1. Create a `.env` file in the repository root and set `OPENROUTER_API_KEY`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID`. `EMBEDDING_MODEL` defaults to `openai/text-embedding-3-small`; `AGENT_MAX_STEPS` defaults to `4`. The application reads `.env` directly.
+2. Place the private SunGrid Markdown knowledge files in a local `docs/` folder. They are required for indexing and are not included in this repository.
+3. Start Qdrant: `docker compose up -d qdrant`.
+4. Choose a demo:
+   - Terminal chat: `uv run python -m sungrid.terminal` with uv, or `python -m sungrid.terminal` with pip.
+   - API service: `uv run uvicorn sungrid.api:app --reload` with uv, or `uvicorn sungrid.api:app --reload` with pip.
+
+Both demos index the fixed `docs/` folder when they start and reuse the index while it is current. In the terminal chat, type `quit` or `exit` to stop. Run tests with `uv run pytest` using uv or `python -m pytest` using pip.
 
 ## Assumptions
 

@@ -6,6 +6,8 @@ __pycache__/
 .venv/
 venv/
 env/
+extras/
+tests/
 \*.egg
 
 # Byte-compiled / optimized
@@ -42,8 +44,6 @@ GLOSSARY.md
 .scratch/
 reports/
 skills-lock.json
-.env.example
-tests/
 
 # Qdrant runtime (Docker volume - local database directory)
 qdrant_storage/
