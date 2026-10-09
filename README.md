@@ -39,10 +39,12 @@ On macOS or Linux, activate it with `source .venv/bin/activate` instead.
 
 Both demos index the fixed `docs/` folder when they start and reuse the index while it is current. In the terminal chat, type `quit` or `exit` to stop. Run tests with `uv run pytest` using uv or `python -m pytest` using pip.
 
-Each chat request writes one structured log event to the console. It records the
-request ID, relevant model IDs, classifier and path, eligibility field names provided
-or still needed, outcome, timing, and model usage. It does not record chat text or ZIP
-and income values. Keep `LOG_LEVEL=INFO` (the default) to see these events.
+Each chat request writes a privacy-safe structured event to `logs/sungrid.log` in the
+background. The file rotates automatically and stays ignored by Git. Events include
+request IDs, model IDs, the selected path, eligibility field names, outcomes, timing,
+and model usage; they do not include chat text or ZIP and income values. HTTP request
+lines and the model startup banner are hidden from the terminal. `LOG_LEVEL=INFO` is
+the default.
 
 ## Assumptions
 

@@ -521,3 +521,46 @@ def test_invalid_eligibility_result_fails_safely():
     assert reply.outcome == "error"
     assert "couldn't complete" in reply.answer
     assert "eligible" not in reply.answer.lower()
+
+
+def test_request_events_are_saved_without_terminal_output(tmp_path, monkeypatch, capsys):
+    import logging
+    import os
+
+    from sungrid import runtime
+
+    app_loggers = [logging.getLogger(name) for name in ("sungrid.requests", "sungrid.models")]
+    saved_logger_state = [
+        (logger.handlers[:], logger.level, logger.propagate) for logger in app_loggers
+    ]
+    noisy_loggers = [
+        logging.getLogger(name) for name in ("httpx", "httpcore", "uvicorn.access")
+    ]
+    saved_noisy_levels = [logger.level for logger in noisy_loggers]
+    monkeypatch.setattr(runtime, "PROJECT_ROOT", tmp_path)
+    monkeypatch.setenv("LOG_LEVEL", "INFO")
+
+    try:
+        runtime.configure_logging()
+        logging.getLogger("sungrid.requests").info(
+            '{"event":"chat_request_completed"}'
+        )
+
+        assert (tmp_path / "logs" / "sungrid.log").read_text(encoding="utf-8") == (
+            '{"event":"chat_request_completed"}\n'
+        )
+        assert capsys.readouterr().out == ""
+        assert logging.getLogger("sungrid.requests").propagate is False
+        assert all(logger.level >= logging.WARNING for logger in noisy_loggers)
+        assert os.environ["PYDANTIC_AI_NO_BANNER"] == "1"
+    finally:
+        for logger, (handlers, level, propagate) in zip(app_loggers, saved_logger_state):
+            for handler in logger.handlers[:]:
+                if handler not in handlers:
+                    logger.removeHandler(handler)
+                    handler.close()
+            logger.handlers = handlers
+            logger.setLevel(level)
+            logger.propagate = propagate
+        for logger, level in zip(noisy_loggers, saved_noisy_levels):
+            logger.setLevel(level)

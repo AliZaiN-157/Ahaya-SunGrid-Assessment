@@ -1,7 +1,7 @@
 import logging
 import os
-import sys
 from functools import lru_cache
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -19,6 +19,7 @@ from sungrid.model import create_answerer, create_classifier, create_eligibility
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env", override=False)
+os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
 
 
 def configure_logging() -> None:
@@ -26,10 +27,43 @@ def configure_logging() -> None:
     level = logging.getLevelName(level_name)
     if not isinstance(level, int):
         level = logging.INFO
-    logging.basicConfig(level=level, format="%(message)s", stream=sys.stdout)
-    logging.getLogger().setLevel(level)
-    logging.getLogger("sungrid.requests").setLevel(level)
-    logging.getLogger("sungrid.models").setLevel(level)
+    os.environ["PYDANTIC_AI_NO_BANNER"] = "1"
+    log_path = PROJECT_ROOT / "logs" / "sungrid.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    for name in ("sungrid.requests", "sungrid.models"):
+        logger = logging.getLogger(name)
+        logger.setLevel(level)
+        logger.propagate = False
+        existing = next(
+            (
+                handler
+                for handler in logger.handlers
+                if getattr(handler, "_sungrid_file_handler", False)
+                and Path(handler.baseFilename) == log_path.resolve()
+            ),
+            None,
+        )
+        for handler in logger.handlers[:]:
+            if (
+                getattr(handler, "_sungrid_file_handler", False)
+                and handler is not existing
+            ):
+                logger.removeHandler(handler)
+                handler.close()
+        if existing is None:
+            handler = RotatingFileHandler(
+                log_path,
+                maxBytes=2 * 1024 * 1024,
+                backupCount=3,
+                encoding="utf-8",
+            )
+            handler.setFormatter(logging.Formatter("%(message)s"))
+            handler._sungrid_file_handler = True
+            logger.addHandler(handler)
+
+    for name in ("httpx", "httpcore", "uvicorn.access"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 @lru_cache(maxsize=1)
