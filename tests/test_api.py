@@ -11,12 +11,17 @@ client = TestClient(api.app)
 
 def test_api_indexes_fixed_documents_at_startup(monkeypatch):
     calls = []
+    logging_calls = []
     monkeypatch.setattr(api, "ingest_documents", lambda: calls.append(True) or 14)
+    monkeypatch.setattr(
+        api, "configure_logging", lambda: logging_calls.append(True)
+    )
 
     with TestClient(api.app) as startup_client:
         assert startup_client.get("/openapi.json").status_code == 200
 
     assert calls == [True]
+    assert logging_calls == [True]
 
 
 def test_ingest_endpoint_reports_indexed_chunks(monkeypatch):

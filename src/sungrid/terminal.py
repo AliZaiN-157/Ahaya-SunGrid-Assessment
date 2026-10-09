@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 from sungrid.chat import ChatServices, ChatState, handle_chat_message
-from sungrid.runtime import create_chat_services, ingest_documents
+from sungrid.runtime import configure_logging, create_chat_services, ingest_documents
 
 
 InputFunction = Callable[[str], str]
@@ -44,6 +44,7 @@ def run_terminal_chat(
 
 
 def main() -> int:
+    configure_logging()
     print("Preparing the SunGrid document library...")
     try:
         chunk_count = ingest_documents()

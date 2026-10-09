@@ -5,7 +5,7 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
 
 from sungrid.chat import ChatReply, ChatState, handle_chat_message
-from sungrid.runtime import create_chat_services, ingest_documents
+from sungrid.runtime import configure_logging, create_chat_services, ingest_documents
 
 
 class ChatSession(BaseModel):
@@ -23,6 +23,7 @@ class AgentResponse(ChatReply):
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    configure_logging()
     ingest_documents()
     yield
 

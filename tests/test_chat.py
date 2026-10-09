@@ -387,6 +387,48 @@ def test_model_failure_is_safe_and_logs_no_raw_question(caplog):
     assert "total_latency_ms" in caplog.text
 
 
+def test_eligibility_logs_show_progress_without_member_values(caplog):
+    caplog.set_level("INFO", logger="sungrid.requests")
+    state = ChatState()
+    classification = Classification(
+        primary_category="incentive_rebate", confidence=0.95, eligibility_intent=True
+    )
+    services_ = services(lambda question, category: [], classification)
+
+    first = handle_chat_message(
+        "Can you check my rebate eligibility? ZIP 94101", services_, state
+    )
+    second = handle_chat_message(
+        "Annual income $80,000, system size 5 kW, installer approved",
+        services_,
+        state,
+    )
+    events = [
+        json.loads(record.message)
+        for record in caplog.records
+        if record.name == "sungrid.requests"
+    ]
+
+    assert first.outcome == "needs_more_input"
+    assert second.outcome == "eligible"
+    assert events[0]["event"] == "chat_request_completed"
+    assert events[0]["path"] == "eligibility"
+    assert events[0]["missing_fields"] == [
+        "annual_income_usd",
+        "system_size_kw",
+        "installer_approved",
+    ]
+    assert events[1]["eligibility_fields"] == [
+        "household_zip",
+        "annual_income_usd",
+        "system_size_kw",
+        "installer_approved",
+    ]
+    assert "94101" not in caplog.text
+    assert "80000" not in caplog.text
+    assert "5 kW" not in caplog.text
+
+
 def test_request_log_includes_retry_and_token_usage(caplog):
     from sungrid.model import retry_model_call
 

@@ -128,6 +128,10 @@ def test_terminal_chat_treats_end_of_input_as_a_clean_exit():
 
 def test_terminal_main_reports_startup_failure(monkeypatch, capsys):
     terminal = terminal_module()
+    logging_calls = []
+    monkeypatch.setattr(
+        terminal, "configure_logging", lambda: logging_calls.append(True)
+    )
 
     def fail_to_index():
         raise RuntimeError("Document memory is unavailable.")
@@ -138,3 +142,4 @@ def test_terminal_main_reports_startup_failure(monkeypatch, capsys):
 
     assert result == 1
     assert "Startup error: Document memory is unavailable." in capsys.readouterr().out
+    assert logging_calls == [True]

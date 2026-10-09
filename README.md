@@ -39,6 +39,11 @@ On macOS or Linux, activate it with `source .venv/bin/activate` instead.
 
 Both demos index the fixed `docs/` folder when they start and reuse the index while it is current. In the terminal chat, type `quit` or `exit` to stop. Run tests with `uv run pytest` using uv or `python -m pytest` using pip.
 
+Each chat request writes one structured log event to the console. It records the
+request ID, classifier and path, eligibility field names provided or still needed,
+outcome, timing, and model usage. It does not record chat text or ZIP and income
+values. Keep `LOG_LEVEL=INFO` (the default) to see these events.
+
 ## Assumptions
 
 The knowledge base is a fixed set of Markdown files; each non-empty `##` section is one chunk, and document category mappings are maintained in code. The ambiguous rebate-adjustment document is tagged for both incentive and billing searches. Eligibility session state is kept in API process memory and is temporary.

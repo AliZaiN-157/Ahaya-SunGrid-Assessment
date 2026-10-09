@@ -255,6 +255,13 @@ def _eligibility_or_request_more(
     classification: Classification | None,
 ) -> ChatReply:
     missing = state.eligibility_facts.missing_labels()
+    eligibility_values = state.eligibility_facts.model_dump()
+    eligibility_fields = [
+        name for name, value in eligibility_values.items() if value is not None
+    ]
+    missing_fields = [
+        name for name, value in eligibility_values.items() if value is None
+    ]
     category = classification.primary_category if classification else "incentive_rebate"
     confidence = classification.confidence if classification else None
     if missing:
@@ -267,6 +274,8 @@ def _eligibility_or_request_more(
             category=category,
             confidence=confidence,
             path="eligibility",
+            eligibility_fields=eligibility_fields,
+            missing_fields=missing_fields,
         )
 
     try:
@@ -286,6 +295,8 @@ def _eligibility_or_request_more(
             category=category,
             confidence=confidence,
             path="eligibility",
+            eligibility_fields=eligibility_fields,
+            missing_fields=missing_fields,
             error_type=type(exc).__name__,
         )
 
@@ -303,6 +314,8 @@ def _eligibility_or_request_more(
             category=category,
             confidence=confidence,
             path="eligibility",
+            eligibility_fields=eligibility_fields,
+            missing_fields=missing_fields,
         )
     answer = f"The household is not eligible: {result.reason} The rebate is $0. You may appeal within 30 days of the determination."
     return _finish(
@@ -311,12 +324,15 @@ def _eligibility_or_request_more(
         category=category,
         confidence=confidence,
         path="eligibility",
+        eligibility_fields=eligibility_fields,
+        missing_fields=missing_fields,
     )
 
 
 def _finish(request_id: str, reply: ChatReply, **details) -> ChatReply:
     details.setdefault("path", "knowledge")
     event = {
+        "event": "chat_request_completed",
         "request_id": request_id,
         "outcome": reply.outcome,
         "total_latency_ms": round((time.perf_counter() - request_started.get()) * 1000),

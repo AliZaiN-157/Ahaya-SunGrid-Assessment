@@ -1,4 +1,6 @@
+import logging
 import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -17,6 +19,17 @@ from sungrid.model import create_answerer, create_classifier, create_eligibility
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env", override=False)
+
+
+def configure_logging() -> None:
+    level_name = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+    level = logging.getLevelName(level_name)
+    if not isinstance(level, int):
+        level = logging.INFO
+    logging.basicConfig(level=level, format="%(message)s", stream=sys.stdout)
+    logging.getLogger().setLevel(level)
+    logging.getLogger("sungrid.requests").setLevel(level)
+    logging.getLogger("sungrid.models").setLevel(level)
 
 
 @lru_cache(maxsize=1)
