@@ -189,7 +189,7 @@ def test_decision_classifier_returns_same_classification_shape(monkeypatch):
     assert classification == Classification(
         primary_category="billing_account",
         related_categories=["incentive_rebate"],
-        confidence=0.87,
+        confidence=0.9,
         eligibility_intent=False,
     )
     url, request = requests[0]

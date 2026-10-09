@@ -219,10 +219,17 @@ def _create_decision_classifier(api_key: str, model_id: str):
         primary_category = primary.get("choice")
         if primary_category not in (*CATEGORIES, "non_relevant"):
             raise ValueError("Decision model returned an unknown primary category.")
-        confidence = primary.get("confidence")
+        # Jev confidence measures distribution concentration, so use the winning
+        # category probability for the app's existing clarification threshold.
+        probabilities = primary.get("probabilities")
+        confidence = (
+            probabilities.get(primary_category)
+            if isinstance(probabilities, dict)
+            else None
+        )
         if not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
             raise ValueError(
-                "Decision model returned an invalid classification confidence."
+                "Decision model returned an invalid primary-category probability."
             )
 
         related_categories = []
