@@ -341,6 +341,10 @@ def _finish(request_id: str, reply: ChatReply, **details) -> ChatReply:
         "answer_model": os.getenv("ANSWER_MODEL_ID"),
         **details,
     }
+    if event["path"] == "knowledge":
+        event["embedding_model"] = os.getenv(
+            "EMBEDDING_MODEL", "openai/text-embedding-3-small"
+        )
     if "category" in details:
         event["applied_filter"] = (
             None

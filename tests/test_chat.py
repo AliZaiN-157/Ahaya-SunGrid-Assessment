@@ -429,9 +429,10 @@ def test_eligibility_logs_show_progress_without_member_values(caplog):
     assert "5 kW" not in caplog.text
 
 
-def test_request_log_includes_retry_and_token_usage(caplog):
+def test_request_log_includes_retry_and_token_usage(caplog, monkeypatch):
     from sungrid.model import retry_model_call
 
+    monkeypatch.setenv("EMBEDDING_MODEL", "test-embedding-model")
     caplog.set_level("INFO", logger="sungrid.requests")
     attempts = []
 
@@ -465,6 +466,7 @@ def test_request_log_includes_retry_and_token_usage(caplog):
     assert event["input_tokens"] == 12
     assert event["output_tokens"] == 4
     assert event["reported_cost_usd"] == 0.001
+    assert event["embedding_model"] == "test-embedding-model"
 
 
 def test_retrieval_failure_does_not_show_exception():
