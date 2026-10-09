@@ -3,8 +3,9 @@ import json
 import logging
 import re
 import time
-from dataclasses import dataclass
 from collections.abc import Callable
+from dataclasses import dataclass
+from types import SimpleNamespace
 from typing import TypeVar
 
 import httpx
@@ -28,6 +29,8 @@ from sungrid.taxonomy import CATEGORIES, Classification
 _T = TypeVar("_T")
 logger = logging.getLogger("sungrid.models")
 DEFAULT_AGENT_MAX_STEPS = 4
+OPENROUTER_DECISIONS_URL = "https://openrouter.ai/api/alpha/decisions"
+DECISION_THRESHOLD = 0.5
 
 
 def agent_usage_limits() -> UsageLimits:
@@ -120,15 +123,23 @@ class EligibilityRun:
 
 
 def create_classifier():
+    """Build a classifier using either a chat LLM or a typed decision model."""
     agent_usage_limits()
     api_key = os.getenv("OPENROUTER_API_KEY", "").strip()
     model_id = os.getenv("CLASSIFIER_MODEL_ID", "").strip()
+    backend = os.getenv("CLASSIFIER_BACKEND", "llm").strip().lower()
     if not api_key:
         raise ValueError(
             "Set OPENROUTER_API_KEY in .env before starting the API service."
         )
     if not model_id:
         raise ValueError("Set CLASSIFIER_MODEL_ID to a model available on OpenRouter.")
+
+    if backend == "decision":
+        return _create_decision_classifier(api_key, model_id)
+    if backend != "llm":
+        raise ValueError("CLASSIFIER_BACKEND must be 'llm' or 'decision'.")
+
     model = OpenRouterModel(model_id, provider=OpenRouterProvider(api_key=api_key))
     agent = Agent(
         model, output_type=Classification, instructions=CLASSIFIER_PROMPT, retries=2
@@ -139,6 +150,149 @@ def create_classifier():
         return result.output
 
     return classify
+
+
+def _create_decision_classifier(api_key: str, model_id: str):
+    category_descriptions = {
+        "program_policies": (
+            "Membership rules, governance, voting, and cooperative policies."
+        ),
+        "incentive_rebate": (
+            "Rebates, incentives, program funding, and rebate eligibility."
+        ),
+        "billing_account": (
+            "Bills, payments, billing adjustments, accounts, and autopay."
+        ),
+        "technical_installation": (
+            "Solar, battery, installer, equipment, and installation guidance."
+        ),
+        "company_updates": "Company news, annual impact, and organizational updates.",
+        "non_relevant": (
+            "Unrelated questions or SunGrid questions unsupported by available topics."
+        ),
+    }
+    questions = {
+        "primary_category": {
+            "type": "choice",
+            "instructions": "Which single topic best matches the member's question?",
+            "criteria": category_descriptions,
+        },
+        "eligibility_intent": {
+            "type": "noul",
+            "instructions": (
+                "Is the member asking whether their household qualifies for the "
+                "SunGrid rooftop rebate?"
+            ),
+            "criteria": {
+                "true": (
+                    "The member asks to check, estimate, or determine their "
+                    "household's eligibility for the rooftop rebate."
+                ),
+                "false": (
+                    "The member asks about a rebate generally, but not whether "
+                    "their household qualifies."
+                ),
+            },
+        },
+    }
+    for category in CATEGORIES:
+        questions[f"related_{category}"] = {
+            "type": "noul",
+            "instructions": (
+                f"Is {category_descriptions[category]} also needed to answer a "
+                "separate part of the question?"
+            ),
+            "criteria": {
+                "true": "Yes, the question has a separate part that needs this topic.",
+                "false": "No, this topic is not needed to answer the question.",
+            },
+        }
+
+    def classify(question: str) -> Classification:
+        response = retry_model_call(
+            lambda: _post_decision_request(api_key, model_id, question, questions)
+        )
+        answers = response["answers"]
+        primary = answers["primary_category"]
+        if primary.get("type") != "choice":
+            raise ValueError("Decision model returned an invalid primary category.")
+        primary_category = primary.get("choice")
+        if primary_category not in (*CATEGORIES, "non_relevant"):
+            raise ValueError("Decision model returned an unknown primary category.")
+        confidence = primary.get("confidence")
+        if not isinstance(confidence, (int, float)) or not 0 <= confidence <= 1:
+            raise ValueError(
+                "Decision model returned an invalid classification confidence."
+            )
+
+        related_categories = []
+        for category in CATEGORIES:
+            related = answers[f"related_{category}"]
+            if related.get("type") != "noul":
+                raise ValueError(
+                    "Decision model returned an invalid related-category answer."
+                )
+            probability = related.get("noul")
+            if not isinstance(probability, (int, float)) or not 0 <= probability <= 1:
+                raise ValueError(
+                    "Decision model returned an invalid related-category probability."
+                )
+            if category != primary_category and probability >= DECISION_THRESHOLD:
+                related_categories.append(category)
+
+        eligibility = answers["eligibility_intent"]
+        if eligibility.get("type") != "noul":
+            raise ValueError("Decision model returned an invalid eligibility answer.")
+        eligibility_probability = eligibility.get("noul")
+        if (
+            not isinstance(eligibility_probability, (int, float))
+            or not 0 <= eligibility_probability <= 1
+        ):
+            raise ValueError(
+                "Decision model returned an invalid eligibility probability."
+            )
+
+        usage = response.get("usage", {})
+        record_model_usage(
+            SimpleNamespace(
+                requests=1,
+                input_tokens=usage.get("input_tokens", 0),
+                output_tokens=usage.get("output_tokens", 0),
+                total_tokens=usage.get(
+                    "total_tokens",
+                    usage.get("input_tokens", 0) + usage.get("output_tokens", 0),
+                ),
+                cost=usage.get("cost"),
+            )
+        )
+        return Classification(
+            primary_category=primary_category,
+            related_categories=related_categories,
+            confidence=confidence,
+            eligibility_intent=eligibility_probability >= DECISION_THRESHOLD,
+        )
+
+    return classify
+
+
+def _post_decision_request(
+    api_key: str, model_id: str, question: str, questions: dict
+):
+    response = httpx.post(
+        OPENROUTER_DECISIONS_URL,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model_id,
+            "state": {"question": question},
+            "questions": questions,
+        },
+        timeout=30.0,
+    )
+    response.raise_for_status()
+    return response.json()
 
 
 def create_answerer():

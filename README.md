@@ -30,7 +30,7 @@ On macOS or Linux, activate it with `source .venv/bin/activate` instead.
 
 ### Configure and run
 
-1. Create a `.env` file in the repository root and set `OPENROUTER_API_KEY`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID`. `EMBEDDING_MODEL` defaults to `openai/text-embedding-3-small`; `AGENT_MAX_STEPS` defaults to `4`. The application reads `.env` directly.
+1. Create a `.env` file in the repository root and set `OPENROUTER_API_KEY`, `CLASSIFIER_BACKEND`, `CLASSIFIER_MODEL_ID`, and `ANSWER_MODEL_ID`. Set `CLASSIFIER_BACKEND=llm` for a chat model that supports structured output, or `CLASSIFIER_BACKEND=decision` for a model on OpenRouter's Decisions API, such as `typesafe/jev-1.13`. `CLASSIFIER_MODEL_ID` selects the model within that backend. Both backends return the same typed classification for routing. `EMBEDDING_MODEL` defaults to `openai/text-embedding-3-small`; `AGENT_MAX_STEPS` defaults to `4`. The application reads `.env` directly.
 2. Place the private SunGrid Markdown knowledge files in a local `docs/` folder. They are required for indexing and are not included in this repository.
 3. Start Qdrant: `docker compose up -d qdrant`.
 4. Choose a demo:

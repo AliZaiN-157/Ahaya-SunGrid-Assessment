@@ -135,6 +135,83 @@ def test_classifier_rejects_invalid_step_limit_during_setup(monkeypatch):
         create_classifier()
 
 
+def test_decision_classifier_returns_same_classification_shape(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("CLASSIFIER_BACKEND", "decision")
+    monkeypatch.setenv("CLASSIFIER_MODEL_ID", "typesafe/jev-1.13")
+    response = {
+        "answers": {
+            "primary_category": {
+                "type": "choice",
+                "choice": "billing_account",
+                "confidence": 0.87,
+                "probabilities": {"billing_account": 0.9},
+            },
+            "related_incentive_rebate": {"type": "noul", "noul": 0.8},
+            "related_program_policies": {"type": "noul", "noul": 0.1},
+            "related_billing_account": {"type": "noul", "noul": 0.2},
+            "related_technical_installation": {"type": "noul", "noul": 0.05},
+            "related_company_updates": {"type": "noul", "noul": 0.05},
+            "eligibility_intent": {"type": "noul", "noul": 0.05},
+        },
+        "usage": {"input_tokens": 100, "output_tokens": 20, "cost": 0.001},
+    }
+    requests = []
+
+    class Response:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return response
+
+    def post(url, **kwargs):
+        requests.append((url, kwargs))
+        return Response()
+
+    monkeypatch.setattr(model.httpx, "post", post)
+
+    metrics = {
+        "retry_count": 0,
+        "model_requests": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "total_tokens": 0,
+    }
+    token = request_metrics.set(metrics)
+    try:
+        classification = create_classifier()(
+            "Did my missing rebate affect the billing adjustment?"
+        )
+    finally:
+        request_metrics.reset(token)
+
+    assert classification == Classification(
+        primary_category="billing_account",
+        related_categories=["incentive_rebate"],
+        confidence=0.87,
+        eligibility_intent=False,
+    )
+    url, request = requests[0]
+    assert url.endswith("/api/alpha/decisions")
+    assert request["headers"]["Authorization"] == "Bearer test-key"
+    assert request["json"]["model"] == "typesafe/jev-1.13"
+    assert request["json"]["questions"]["primary_category"]["type"] == "choice"
+    assert metrics["model_requests"] == 1
+    assert metrics["input_tokens"] == 100
+    assert metrics["output_tokens"] == 20
+    assert metrics["reported_cost_usd"] == 0.001
+
+
+def test_classifier_rejects_unknown_backend(monkeypatch):
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    monkeypatch.setenv("CLASSIFIER_BACKEND", "unknown")
+    monkeypatch.setenv("CLASSIFIER_MODEL_ID", "provider/model")
+
+    with pytest.raises(ValueError, match="CLASSIFIER_BACKEND"):
+        create_classifier()
+
+
 def test_classifier_run_usage_is_added_to_request_log(monkeypatch, caplog):
     monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
     monkeypatch.setenv("CLASSIFIER_MODEL_ID", "provider/model")

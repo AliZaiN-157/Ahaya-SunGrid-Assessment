@@ -320,6 +320,7 @@ def _finish(request_id: str, reply: ChatReply, **details) -> ChatReply:
         "request_id": request_id,
         "outcome": reply.outcome,
         "total_latency_ms": round((time.perf_counter() - request_started.get()) * 1000),
+        "classifier_backend": os.getenv("CLASSIFIER_BACKEND", "llm"),
         "classifier_model": os.getenv("CLASSIFIER_MODEL_ID"),
         "answer_model": os.getenv("ANSWER_MODEL_ID"),
         **details,
